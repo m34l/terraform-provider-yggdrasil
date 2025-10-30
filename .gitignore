@@ -1,0 +1,32 @@
+# Binaries
+bin/
+*.exe
+terraform-provider-yggdrasil
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+
+# Sensitive files
+*.tfvars
+certs/*.key
+certs/*.crt
+certs/*.pem
+
+examples/*.tfvars
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
