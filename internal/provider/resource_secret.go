@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -27,7 +29,8 @@ type SecretResourceModel struct {
 	ID        tfTypes.String `tfsdk:"id"`
 	Namespace tfTypes.String `tfsdk:"namespace"`
 	Key       tfTypes.String `tfsdk:"key"`
-	Value     tfTypes.String `tfsdk:"value"` // Sensitive
+	Value     tfTypes.String `tfsdk:"value"`
+	Tag       tfTypes.String `tfsdk:"tag"`
 	Tags      tfTypes.Map    `tfsdk:"tags"`
 	Version   tfTypes.Int64  `tfsdk:"version"`
 	UpdatedAt tfTypes.String `tfsdk:"updated_at"`
@@ -39,32 +42,53 @@ func (r *SecretResource) Metadata(_ context.Context, _ resource.MetadataRequest,
 
 func (r *SecretResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = resSchema.Schema{
+		Description: "Manages a secret in Yggdrasil configuration service",
 		Attributes: map[string]resSchema.Attribute{
 			"id": resSchema.StringAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Identifier in format namespace/key@tag",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"namespace": resSchema.StringAttribute{
-				Required: true,
+				Required:    true,
+				Description: "Namespace where the secret will be stored",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"key": resSchema.StringAttribute{
-				Required: true,
+				Required:    true,
+				Description: "Key name for the secret",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"value": resSchema.StringAttribute{
-				Required:  true,
-				Sensitive: true,
+				Required:    true,
+				Sensitive:   true,
+				Description: "Secret value to store",
+			},
+			"tag": resSchema.StringAttribute{
+				Required:    true,
+				Description: "Tag to store this secret under (e.g., 'production', 'staging')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"tags": resSchema.MapAttribute{
 				ElementType: tfTypes.StringType,
-				Optional:    true,
+				Computed:    true,
+				Description: "Metadata tags (computed)",
 			},
 			"version": resSchema.Int64Attribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Configuration version",
 			},
 			"updated_at": resSchema.StringAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Last update timestamp",
 			},
 		},
 	}
@@ -84,11 +108,12 @@ func (r *SecretResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	tag := plan.Tag.ValueString()
 	payload := SecretPayload{
 		Namespace: plan.Namespace.ValueString(),
 		Key:       plan.Key.ValueString(),
 		Value:     plan.Value.ValueString(),
-		Tags:      mapFromTF(ctx, plan.Tags),
+		Tags:      map[string]string{tag: tag},
 	}
 
 	out, err := r.client.UpsertSecret(payload)
@@ -98,9 +123,15 @@ func (r *SecretResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	state := plan
-	state.ID = tfTypes.StringValue(fmt.Sprintf("%s/%s", out.Namespace, out.Key))
+	state.ID = tfTypes.StringValue(fmt.Sprintf("%s/%s@%s", out.Namespace, out.Key, tag))
 	state.Version = tfTypes.Int64Value(int64(out.Version))
 	state.UpdatedAt = tfTypes.StringValue(out.UpdatedAt)
+
+	// FIXED: Set tags with known value
+	tagsMap := make(map[string]attr.Value)
+	tagsMap[tag] = tfTypes.StringValue(tag)
+	state.Tags = tfTypes.MapValueMust(tfTypes.StringType, tagsMap)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -113,7 +144,9 @@ func (r *SecretResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	ns := state.Namespace.ValueString()
 	key := state.Key.ValueString()
-	out, err := r.client.GetSecret(ns, key)
+	tag := state.Tag.ValueString()
+
+	out, err := r.client.GetSecret(ns, key, tag)
 	if err != nil {
 		resp.Diagnostics.AddError("Read failed", err.Error())
 		return
@@ -122,9 +155,18 @@ func (r *SecretResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.State.RemoveResource(ctx)
 		return
 	}
+
+	// Only update computed fields, keep value from state (Terraform best practice)
 	state.Version = tfTypes.Int64Value(int64(out.Version))
 	state.UpdatedAt = tfTypes.StringValue(out.UpdatedAt)
-	// Jangan set ulang Value dari remote bila API tidak mengembalikan (atau redaksi)
+
+	// FIXED: Ensure tags is always set
+	if state.Tags.IsNull() || state.Tags.IsUnknown() {
+		tagsMap := make(map[string]attr.Value)
+		tagsMap[tag] = tfTypes.StringValue(tag)
+		state.Tags = tfTypes.MapValueMust(tfTypes.StringType, tagsMap)
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -137,21 +179,30 @@ func (r *SecretResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
+	tag := plan.Tag.ValueString()
 	payload := SecretPayload{
 		Namespace: plan.Namespace.ValueString(),
 		Key:       plan.Key.ValueString(),
 		Value:     plan.Value.ValueString(),
-		Tags:      mapFromTF(ctx, plan.Tags),
+		Tags:      map[string]string{tag: tag},
 	}
+
 	out, err := r.client.UpsertSecret(payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Update failed", err.Error())
 		return
 	}
+
 	state = plan
-	state.ID = tfTypes.StringValue(fmt.Sprintf("%s/%s", out.Namespace, out.Key))
+	state.ID = tfTypes.StringValue(fmt.Sprintf("%s/%s@%s", out.Namespace, out.Key, tag))
 	state.Version = tfTypes.Int64Value(int64(out.Version))
 	state.UpdatedAt = tfTypes.StringValue(out.UpdatedAt)
+
+	// FIXED: Set tags with known value
+	tagsMap := make(map[string]attr.Value)
+	tagsMap[tag] = tfTypes.StringValue(tag)
+	state.Tags = tfTypes.MapValueMust(tfTypes.StringType, tagsMap)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -161,32 +212,52 @@ func (r *SecretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.DeleteSecret(state.Namespace.ValueString(), state.Key.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Delete failed", err.Error())
-	}
+
+	// NO-OP: We don't actually delete secrets from Yggdrasil
+	// This is by design to:
+	// 1. Avoid database lock contention issues
+	// 2. Prevent accidental deletion of shared configuration keys
+	// 3. Allow other tags to continue using the same key
+	//
+	// The secret will remain in Yggdrasil but removed from Terraform state only.
+	// If you need to remove the secret, do it manually via Yggdrasil UI or API.
+
+	ns := state.Namespace.ValueString()
+	key := state.Key.ValueString()
+	tag := state.Tag.ValueString()
+
+	resp.Diagnostics.AddWarning(
+		"Secret not deleted from Yggdrasil",
+		fmt.Sprintf(
+			"Secret %s/%s@%s has been removed from Terraform state, "+
+				"but still exists in Yggdrasil. "+
+				"This is intentional to prevent accidental deletion and lock contention. "+
+				"To actually remove the secret, use Yggdrasil UI or API directly.",
+			ns, key, tag,
+		),
+	)
+
+	// State is automatically removed by Terraform Framework after this function returns
 }
 
 func (r *SecretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// import_id format: "namespace/key"
+	// import_id format: "namespace/key@tag"
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	// Split manual
-	var ns, key string
-	for i, ch := range req.ID {
-		if ch == '/' {
-			ns = req.ID[:i]
-			key = req.ID[i+1:]
-			break
+
+	// Parse namespace/key@tag
+	var ns, key, tag string
+	atIdx := strings.LastIndex(req.ID, "@")
+	if atIdx > 0 {
+		tag = req.ID[atIdx+1:]
+		remaining := req.ID[:atIdx]
+		slashIdx := strings.Index(remaining, "/")
+		if slashIdx > 0 {
+			ns = remaining[:slashIdx]
+			key = remaining[slashIdx+1:]
 		}
 	}
+
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace"), ns)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("key"), key)...)
-}
-func mapFromTF(ctx context.Context, m tfTypes.Map) map[string]string {
-	if m.IsNull() || m.IsUnknown() {
-		return nil
-	}
-	out := make(map[string]string)
-	// false = jangan set unknown ke null; sesuaikan kebutuhan
-	_ = m.ElementsAs(ctx, &out, false)
-	return out
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("tag"), tag)...)
 }

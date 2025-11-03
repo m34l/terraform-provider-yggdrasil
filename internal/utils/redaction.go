@@ -31,7 +31,13 @@ func IsSensitiveKey(key string) bool {
 	return false
 }
 
-func RedactString(_ string) string { return RedactionMask }
+// RedactString masks sensitive parts of a string (like tokens)
+func RedactString(s string) string {
+	if len(s) <= 8 {
+		return "***"
+	}
+	return s[:4] + "..." + s[len(s)-4:]
+}
 
 func TruncatePreview(s string) string {
 	if len(s) <= maxPreviewLen {

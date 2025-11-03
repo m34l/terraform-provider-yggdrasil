@@ -20,6 +20,8 @@ certs/*.pem
 
 examples/*.tfvars
 
+yggdrasil-*
+
 # IDE
 .idea/
 .vscode/
