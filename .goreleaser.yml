@@ -2,6 +2,10 @@ version: 2
 
 project_name: terraform-provider-yggdrasil
 
+before:
+  hooks:
+    - go mod tidy
+
 builds:
   - id: provider
     main: ./main.go
@@ -15,6 +19,14 @@ builds:
     goarch: 
       - amd64
       - arm64
+      - arm
+    goarm:
+      - "6"
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w -X main.version={{ .Version }}
 
@@ -23,11 +35,23 @@ archives:
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
+      - LICENSE
       - README.md
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
+
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
 
 changelog:
   sort: asc
@@ -36,8 +60,8 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^chore:'
+      - '^ci:'
 
-# Terraform Registry requires specific release format
 release:
   github:
     owner: m34l
@@ -45,15 +69,5 @@ release:
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
-
-# Optional: Sign releases with GPG (comment out if no GPG key)
-# signs:
-#   - artifacts: checksum
-#     args:
-#       - "--batch"
-#       - "--local-user"
-#       - "{{ .Env.GPG_FINGERPRINT }}"
-#       - "--output"
-#       - "${signature}"
-#       - "--detach-sign"
-#       - "${artifact}"
+  extra_files:
+    - glob: "terraform-registry-manifest.json"
