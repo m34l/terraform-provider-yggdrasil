@@ -69,5 +69,4 @@ release:
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
-  extra_files:
-    - glob: "terraform-registry-manifest.json"
+  # Removed extra_files section - not needed for Terraform Registry
