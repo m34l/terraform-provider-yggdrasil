@@ -16,10 +16,15 @@ description: |-
 
 ### Optional
 
-- `ca_cert_path` (String) Path to CA certificate file.
-- `client_cert_path` (String) Path to client certificate file for mTLS.
-- `client_key_path` (String) Path to client key file for mTLS.
-- `endpoint` (String) API endpoint URL. Can also be set via YGG_ENDPOINT environment variable.
-- `insecure_skip_verify` (Boolean) Skip TLS certificate verification (development only).
-- `namespace_default` (String) Default namespace for secrets.
-- `token` (String, Sensitive) API authentication token. Can also be set via YGG_TOKEN environment variable.
+- `api_version` (String) API version: v1 or v2. Default v2.
+- `auth_header` (String) Override header name (e.g., X-API-KEY). If set, scheme is ignored and token is sent as-is.
+- `auth_scheme` (String) Auth scheme: bearer|token|x-api-key. Default bearer. Ignored if auth_header is set.
+- `ca_cert_path` (String) Path to custom CA certificate (PEM).
+- `client_cert_path` (String) Path to mTLS client certificate (PEM).
+- `client_key_path` (String) Path to mTLS client private key (PEM).
+- `cred_key` (String, Sensitive) Credential key for write operations (resources). Can also be set via YGG_CRED_KEY.
+- `cred_secret` (String, Sensitive) Credential secret for write operations (resources). Can also be set via YGG_CRED_SECRET.
+- `endpoint` (String) Base URL to Yggdrasil API gateway, e.g. https://yggdrasil.api.example.com
+- `insecure_skip_verify` (Boolean) Skip TLS cert verification (NOT recommended in production).
+- `namespace_default` (String) Default namespace if resource doesn't specify one.
+- `token` (String, Sensitive) Token for read operations (data sources). Can also be set via YGG_TOKEN.

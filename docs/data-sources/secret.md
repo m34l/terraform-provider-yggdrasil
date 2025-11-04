@@ -3,12 +3,12 @@
 page_title: "yggdrasil_secret Data Source - terraform-provider-yggdrasil"
 subcategory: ""
 description: |-
-  
+  Fetch a secret from Yggdrasil configuration service
 ---
 
 # yggdrasil_secret (Data Source)
 
-
+Fetch a secret from Yggdrasil configuration service
 
 
 
@@ -17,13 +17,14 @@ description: |-
 
 ### Required
 
-- `key` (String)
-- `namespace` (String)
+- `key` (String) The key name of the secret
+- `namespace` (String) The namespace where the secret is stored
+- `tag` (String) Specific tag to fetch value from (e.g. 'production', 'staging'). No fallback.
 
 ### Read-Only
 
-- `id` (String) The ID of this resource.
+- `id` (String) Identifier in format namespace/key@tag
 - `tags` (Map of String)
-- `updated_at` (String)
-- `value` (String, Sensitive)
-- `version` (Number)
+- `updated_at` (String) Last update timestamp
+- `value` (String, Sensitive) The secret value from the specified tag
+- `version` (Number) Version of the configuration

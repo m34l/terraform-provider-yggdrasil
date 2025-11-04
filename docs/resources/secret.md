@@ -3,12 +3,12 @@
 page_title: "yggdrasil_secret Resource - terraform-provider-yggdrasil"
 subcategory: ""
 description: |-
-  
+  Manages a secret in Yggdrasil configuration service
 ---
 
 # yggdrasil_secret (Resource)
 
-
+Manages a secret in Yggdrasil configuration service
 
 
 
@@ -17,16 +17,14 @@ description: |-
 
 ### Required
 
-- `key` (String)
-- `namespace` (String)
-- `value` (String, Sensitive)
-
-### Optional
-
-- `tags` (Map of String)
+- `key` (String) Key name for the secret
+- `namespace` (String) Namespace where the secret will be stored
+- `tag` (String) Tag to store this secret under (e.g., 'production', 'staging')
+- `value` (String, Sensitive) Secret value to store
 
 ### Read-Only
 
-- `id` (String) The ID of this resource.
-- `updated_at` (String)
-- `version` (Number)
+- `id` (String) Identifier in format namespace/key@tag
+- `tags` (Map of String) Metadata tags (computed)
+- `updated_at` (String) Last update timestamp
+- `version` (Number) Configuration version
