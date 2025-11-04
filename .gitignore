@@ -32,3 +32,6 @@ yggdrasil-*
 # OS
 .DS_Store
 Thumbs.db
+
+# GoReleaser
+dist/
