@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,26 +33,38 @@ func newClient(cfg Config) (*APIClient, error) {
 	// TLS setup
 	tlsCfg := &tls.Config{InsecureSkipVerify: cfg.InsecureSkipVerify} //nolint:gosec
 
-	// Custom CA
-	if strings.TrimSpace(cfg.CACertPath) != "" {
-		ca, err := os.ReadFile(filepath.Clean(cfg.CACertPath))
-		if err != nil {
-			return nil, fmt.Errorf("read CA cert: %w", err)
-		}
+	// Custom CA - prioritize base64 string over file path
+	caCert, err := getCertData(cfg.CACert, cfg.CACertPath)
+	if err != nil {
+		return nil, fmt.Errorf("read CA cert: %w", err)
+	}
+	if len(caCert) > 0 {
 		cp := x509.NewCertPool()
-		if ok := cp.AppendCertsFromPEM(ca); !ok {
+		if ok := cp.AppendCertsFromPEM(caCert); !ok {
 			return nil, fmt.Errorf("append CA cert failed")
 		}
 		tlsCfg.RootCAs = cp
+		log.Printf("[DEBUG] CA certificate loaded (source: %s)", getCertSource(cfg.CACert, cfg.CACertPath))
 	}
 
-	// mTLS client cert
-	if strings.TrimSpace(cfg.ClientCertPath) != "" && strings.TrimSpace(cfg.ClientKeyPath) != "" {
-		cert, err := tls.LoadX509KeyPair(cfg.ClientCertPath, cfg.ClientKeyPath)
+	// mTLS client cert - prioritize base64 string over file path
+	clientCertData, err := getCertData(cfg.ClientCert, cfg.ClientCertPath)
+	if err != nil {
+		return nil, fmt.Errorf("read client cert: %w", err)
+	}
+
+	clientKeyData, err := getCertData(cfg.ClientKey, cfg.ClientKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read client key: %w", err)
+	}
+
+	if len(clientCertData) > 0 && len(clientKeyData) > 0 {
+		cert, err := tls.X509KeyPair(clientCertData, clientKeyData)
 		if err != nil {
 			return nil, fmt.Errorf("load client keypair: %w", err)
 		}
 		tlsCfg.Certificates = []tls.Certificate{cert}
+		log.Printf("[DEBUG] Client certificate loaded (source: %s)", getCertSource(cfg.ClientCert, cfg.ClientCertPath))
 	}
 
 	hc := &http.Client{
@@ -82,6 +95,42 @@ func newClient(cfg Config) (*APIClient, error) {
 		authHeader:  authHeader,
 		insecureTLS: cfg.InsecureSkipVerify,
 	}, nil
+}
+
+// getCertData returns certificate data from base64 string or file path
+// Priority: base64 string > file path
+func getCertData(base64Cert, filePath string) ([]byte, error) {
+	// If base64 cert is provided, decode and use it
+	if strings.TrimSpace(base64Cert) != "" {
+		decoded, err := base64.StdEncoding.DecodeString(base64Cert)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 certificate: %w", err)
+		}
+		return decoded, nil
+	}
+
+	// Otherwise, read from file path if provided
+	if strings.TrimSpace(filePath) != "" {
+		data, err := os.ReadFile(filepath.Clean(filePath))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		}
+		return data, nil
+	}
+
+	// Neither provided
+	return nil, nil
+}
+
+// getCertSource returns human-readable source of certificate
+func getCertSource(base64Cert, filePath string) string {
+	if strings.TrimSpace(base64Cert) != "" {
+		return "base64 string"
+	}
+	if strings.TrimSpace(filePath) != "" {
+		return "file: " + filePath
+	}
+	return "none"
 }
 
 type SecretPayload struct {

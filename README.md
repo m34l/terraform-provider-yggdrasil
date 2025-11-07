@@ -52,12 +52,14 @@ make install-local
 
 ### Provider Configuration
 
+#### Option 1: Using File Paths (Traditional)
+
 ```hcl
 provider "yggdrasil" {
   endpoint             = "https://yggdrasil.api.example.com"
-  token                = var.ygg_token        # For read operations
-  cred_key             = var.ygg_cred_key     # For write operations
-  cred_secret          = var.ygg_cred_secret  # For write operations
+  token                = var.ygg_token
+  cred_key             = var.ygg_cred_key
+  cred_secret          = var.ygg_cred_secret
   ca_cert_path         = "certs/cacert.crt"
   client_cert_path     = "certs/client.crt"
   client_key_path      = "certs/client.key"
@@ -65,15 +67,57 @@ provider "yggdrasil" {
 }
 ```
 
+#### Option 2: Using Base64 Encoded Certs (Recommended for CI/CD)
+
+```hcl
+provider "yggdrasil" {
+  endpoint             = "https://yggdrasil.api.example.com"
+  token                = var.ygg_token
+  cred_key             = var.ygg_cred_key
+  cred_secret          = var.ygg_cred_secret
+  ca_cert              = var.ygg_ca_cert        # base64 encoded
+  client_cert          = var.ygg_client_cert    # base64 encoded
+  client_key           = var.ygg_client_key     # base64 encoded
+  insecure_skip_verify = false
+}
+```
+
 ### Environment Variables
 
-You can also configure the provider using environment variables:
-
 ```bash
+# Authentication
 export YGG_ENDPOINT="https://yggdrasil.api.example.com"
 export YGG_TOKEN="your-token"
 export YGG_CRED_KEY="your-key"
 export YGG_CRED_SECRET="your-secret"
+
+# Certificates as Base64 (Option 1)
+export YGG_CA_CERT=$(base64 -i certs/cacert.crt)
+export YGG_CLIENT_CERT=$(base64 -i certs/client.crt)
+export YGG_CLIENT_KEY=$(base64 -i certs/client.key)
+
+# Or use file paths (Option 2)
+export YGG_CA_CERT_PATH="certs/cacert.crt"
+export YGG_CLIENT_CERT_PATH="certs/client.crt"
+export YGG_CLIENT_KEY_PATH="certs/client.key"
+```
+
+### Converting Certificates to Base64
+
+```bash
+# Linux/macOS
+base64 -i certs/cacert.crt > cacert.b64
+base64 -i certs/client.crt > client_cert.b64
+base64 -i certs/client.key > client_key.b64
+
+# Or inline
+export YGG_CA_CERT=$(cat certs/cacert.crt | base64)
+export YGG_CLIENT_CERT=$(cat certs/client.crt | base64)
+export YGG_CLIENT_KEY=$(cat certs/client.key | base64)
+
+# Windows PowerShell
+$content = Get-Content certs/cacert.crt -Raw
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($content))
 ```
 
 ### Example: Create Secret
@@ -182,13 +226,18 @@ Get the following certificates from your infrastructure team:
 | `token` | string | Yes* | Token for read operations |
 | `cred_key` | string | Yes* | Key for write operations |
 | `cred_secret` | string | Yes* | Secret for write operations |
-| `ca_cert_path` | string | No | Path to CA certificate |
-| `client_cert_path` | string | No | Path to client certificate (mTLS) |
-| `client_key_path` | string | No | Path to client key (mTLS) |
+| `ca_cert_path` | string | No | Path to CA certificate file |
+| `ca_cert` | string | No | Base64 encoded CA certificate (alternative to ca_cert_path) |
+| `client_cert_path` | string | No | Path to client certificate file |
+| `client_cert` | string | No | Base64 encoded client certificate (alternative to client_cert_path) |
+| `client_key_path` | string | No | Path to client private key file |
+| `client_key` | string | No | Base64 encoded client private key (alternative to client_key_path) |
 | `insecure_skip_verify` | bool | No | Skip TLS verification (dev only) |
 | `namespace_default` | string | No | Default namespace |
 
-Note: Token required for data sources, key-secret required for resources
+**Note**: 
+- Base64 encoded certs take priority over file paths
+- Token required for data sources, key-secret required for resources
 
 ## Resources
 

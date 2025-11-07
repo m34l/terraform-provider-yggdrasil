@@ -18,5 +18,8 @@ provider "yggdrasil" {
   ca_cert_path         = var.ca_cert_path
   client_cert_path     = var.client_cert_path
   client_key_path      = var.client_key_path
+  ca_cert              = var.ca_cert_base64
+  client_cert          = var.client_cert_base64
+  client_key           = var.client_key_base64
   insecure_skip_verify = false
 }

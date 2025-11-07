@@ -29,12 +29,20 @@ type yggdrasilProviderModel struct {
 	CredSecret         pfTypes.String `tfsdk:"cred_secret"`
 	NamespaceDefault   pfTypes.String `tfsdk:"namespace_default"`
 	InsecureSkipVerify pfTypes.Bool   `tfsdk:"insecure_skip_verify"`
-	CACertPath         pfTypes.String `tfsdk:"ca_cert_path"`
-	ClientCertPath     pfTypes.String `tfsdk:"client_cert_path"`
-	ClientKeyPath      pfTypes.String `tfsdk:"client_key_path"`
-	APIVersion         pfTypes.String `tfsdk:"api_version"`
-	AuthScheme         pfTypes.String `tfsdk:"auth_scheme"`
-	AuthHeader         pfTypes.String `tfsdk:"auth_header"`
+
+	// File paths (original)
+	CACertPath     pfTypes.String `tfsdk:"ca_cert_path"`
+	ClientCertPath pfTypes.String `tfsdk:"client_cert_path"`
+	ClientKeyPath  pfTypes.String `tfsdk:"client_key_path"`
+
+	// Base64 encoded certs (NEW)
+	CACert     pfTypes.String `tfsdk:"ca_cert"`
+	ClientCert pfTypes.String `tfsdk:"client_cert"`
+	ClientKey  pfTypes.String `tfsdk:"client_key"`
+
+	APIVersion pfTypes.String `tfsdk:"api_version"`
+	AuthScheme pfTypes.String `tfsdk:"auth_scheme"`
+	AuthHeader pfTypes.String `tfsdk:"auth_header"`
 }
 
 func (p *YggdrasilProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -71,17 +79,34 @@ func (p *YggdrasilProvider) Schema(_ context.Context, _ provider.SchemaRequest, 
 				Optional:    true,
 				Description: "Skip TLS cert verification (NOT recommended in production).",
 			},
+			// File paths
 			"ca_cert_path": schema.StringAttribute{
 				Optional:    true,
-				Description: "Path to custom CA certificate (PEM).",
+				Description: "Path to custom CA certificate (PEM). Alternative to ca_cert.",
 			},
 			"client_cert_path": schema.StringAttribute{
 				Optional:    true,
-				Description: "Path to mTLS client certificate (PEM).",
+				Description: "Path to mTLS client certificate (PEM). Alternative to client_cert.",
 			},
 			"client_key_path": schema.StringAttribute{
 				Optional:    true,
-				Description: "Path to mTLS client private key (PEM).",
+				Description: "Path to mTLS client private key (PEM). Alternative to client_key.",
+			},
+			// Base64 strings (NEW)
+			"ca_cert": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Base64 encoded CA certificate (PEM). Alternative to ca_cert_path. Can be set via YGG_CA_CERT.",
+			},
+			"client_cert": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Base64 encoded mTLS client certificate (PEM). Alternative to client_cert_path. Can be set via YGG_CLIENT_CERT.",
+			},
+			"client_key": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Base64 encoded mTLS client private key (PEM). Alternative to client_key_path. Can be set via YGG_CLIENT_KEY.",
 			},
 			"api_version": schema.StringAttribute{
 				Optional:    true,
@@ -113,12 +138,20 @@ func (p *YggdrasilProvider) Configure(ctx context.Context, req provider.Configur
 		CredSecret:         firstNonEmpty(data.CredSecret.ValueString(), os.Getenv("YGG_CRED_SECRET")),
 		NamespaceDefault:   firstNonEmpty(data.NamespaceDefault.ValueString(), os.Getenv("YGG_NAMESPACE")),
 		InsecureSkipVerify: data.InsecureSkipVerify.ValueBool(),
-		CACertPath:         data.CACertPath.ValueString(),
-		ClientCertPath:     data.ClientCertPath.ValueString(),
-		ClientKeyPath:      data.ClientKeyPath.ValueString(),
-		APIVersion:         firstNonEmpty(data.APIVersion.ValueString(), os.Getenv("YGG_API_VERSION"), "v2"),
-		AuthScheme:         strings.ToLower(firstNonEmpty(data.AuthScheme.ValueString(), os.Getenv("YGG_AUTH_SCHEME"), "bearer")),
-		AuthHeader:         firstNonEmpty(data.AuthHeader.ValueString(), os.Getenv("YGG_AUTH_HEADER")),
+
+		// File paths
+		CACertPath:     data.CACertPath.ValueString(),
+		ClientCertPath: data.ClientCertPath.ValueString(),
+		ClientKeyPath:  data.ClientKeyPath.ValueString(),
+
+		// Base64 certs (NEW)
+		CACert:     firstNonEmpty(data.CACert.ValueString(), os.Getenv("YGG_CA_CERT")),
+		ClientCert: firstNonEmpty(data.ClientCert.ValueString(), os.Getenv("YGG_CLIENT_CERT")),
+		ClientKey:  firstNonEmpty(data.ClientKey.ValueString(), os.Getenv("YGG_CLIENT_KEY")),
+
+		APIVersion: firstNonEmpty(data.APIVersion.ValueString(), os.Getenv("YGG_API_VERSION"), "v2"),
+		AuthScheme: strings.ToLower(firstNonEmpty(data.AuthScheme.ValueString(), os.Getenv("YGG_AUTH_SCHEME"), "bearer")),
+		AuthHeader: firstNonEmpty(data.AuthHeader.ValueString(), os.Getenv("YGG_AUTH_HEADER")),
 	}
 
 	// DEBUG: Log credential status (without exposing actual values)

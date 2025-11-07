@@ -2,19 +2,26 @@ package provider
 
 type Config struct {
 	Endpoint           string
-	Token              string // For read operations (data sources)
-	CredKey            string // For write operations (resources) - key-secret pair
-	CredSecret         string // For write operations (resources) - key-secret pair
+	Token              string
+	CredKey            string
+	CredSecret         string
 	NamespaceDefault   string
 	InsecureSkipVerify bool
-	CACertPath         string
-	ClientCertPath     string
-	ClientKeyPath      string
+
+	// File paths
+	CACertPath     string
+	ClientCertPath string
+	ClientKeyPath  string
+
+	// Base64 encoded certs (NEW)
+	CACert     string
+	ClientCert string
+	ClientKey  string
 
 	// API
-	APIVersion string // "v2" default
+	APIVersion string
 
 	// Auth
-	AuthScheme string // "bearer" | "token" | "x-api-key"
-	AuthHeader string // override header name (e.g. "X-API-KEY")
+	AuthScheme string
+	AuthHeader string
 }

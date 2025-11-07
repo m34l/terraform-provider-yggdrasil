@@ -22,13 +22,41 @@ variable "ygg_cred_secret" {
 }
 
 variable "ca_cert_path" {
-  type = string
+  type        = string
+  description = "Path to CA certificate file"
+  default     = ""
 }
 
 variable "client_cert_path" {
-  type = string
+  type        = string
+  description = "Path to client certificate file"
+  default     = ""
 }
 
 variable "client_key_path" {
-  type = string
+  type        = string
+  description = "Path to client private key file"
+  default     = ""
+}
+
+# Base64 encoded certificates (NEW)
+variable "ca_cert_base64" {
+  type        = string
+  sensitive   = true
+  description = "Base64 encoded CA certificate"
+  default     = ""
+}
+
+variable "client_cert_base64" {
+  type        = string
+  sensitive   = true
+  description = "Base64 encoded client certificate"
+  default     = ""
+}
+
+variable "client_key_base64" {
+  type        = string
+  sensitive   = true
+  description = "Base64 encoded client private key"
+  default     = ""
 }
